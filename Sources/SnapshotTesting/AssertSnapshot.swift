@@ -164,6 +164,7 @@ public func verifySnapshot<Value, Format>(
   matching value: @autoclosure () throws -> Value,
   as snapshotting: Snapshotting<Value, Format>,
   named name: String? = nil,
+  autoRecordIfMissing autoRecordingIfMissing: Bool = true,
   record recording: Bool = false,
   snapshotDirectory: String? = nil,
   timeout: TimeInterval = 5,
@@ -232,24 +233,31 @@ public func verifySnapshot<Value, Format>(
       guard var diffable = optionalDiffable else {
         return "Couldn't snapshot value"
       }
-      
-      guard !recording, fileManager.fileExists(atPath: snapshotFileUrl.path) else {
+
+      guard !recording else {
         try snapshotting.diffing.toData(diffable).write(to: snapshotFileUrl)
-        return recording
-          ? """
-            Record mode is on. Turn record mode off and re-run "\(testName)" to test against the newly-recorded snapshot.
+        return """
+          Record mode is on. Turn record mode off and re-run "\(testName)" to test against the newly-recorded snapshot.
 
-            open "\(snapshotFileUrl.path)"
+          open "\(snapshotFileUrl.path)"
 
-            Recorded snapshot: …
-            """
-          : """
+          Recorded snapshot: …
+          """
+      }
+      
+      guard fileManager.fileExists(atPath: snapshotFileUrl.path) else {
+        if autoRecordingIfMissing {
+          try snapshotting.diffing.toData(diffable).write(to: snapshotFileUrl)
+          return """
             No reference was found on disk. Automatically recorded snapshot: …
 
             open "\(snapshotFileUrl.path)"
 
             Re-run "\(testName)" to test against the newly-recorded snapshot.
             """
+        } else {
+          return "No reference was found on disk, and snapshot was not automatically recorded."
+        }
       }
 
       let data = try Data(contentsOf: snapshotFileUrl)
